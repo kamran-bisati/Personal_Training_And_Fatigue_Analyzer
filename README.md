@@ -18,13 +18,13 @@ locally. No machine learning, no CSV uploads, no cloud services.
 | 2 | Data validation and preprocessing | done |
 | 3 | SQLite database design and integration | done |
 | 4 | Workout and exercise management | done |
-| 5 | Exploratory data analysis | next |
-| 6 | Fitness metrics engine | planned |
-| 7 | Recovery analysis engine | planned |
-| 8 | Plateau / workload / fatigue / deload detection | planned |
-| 9 | Reporting and visualisation | planned |
-| 10 | Streamlit interface | planned |
-| 11 | Testing, debugging and documentation | planned |
+| 5 | Exploratory data analysis | done |
+| 6 | Fitness metrics engine | done |
+| 7 | Recovery analysis engine | done |
+| 8 | Plateau / workload / fatigue / deload detection | done |
+| 9 | Reporting and visualisation | done |
+| 10 | Streamlit interface | done |
+| 11 | Testing, debugging and documentation | next |
 
 ---
 
@@ -38,13 +38,18 @@ python3 -m venv .venv
 ## Run the current build
 
 ```bash
-.venv/bin/python main.py
+# Backend tests
+python -m pytest -q
+
+# Streamlit app
+.venv/bin/streamlit run streamlit_app/app.py
 ```
 
 This builds the sample dataset in memory, prints an inspection report,
 runs the Phase 2 validation and cleaning pipeline on the dirty sample, then
 builds `database/fitness.db`, seeds it, inserts the sample data and prints
 row counts plus sample queries (workout history, personal records).
+Then launch the Streamlit interface at http://localhost:8501.
 
 ## Run tests
 
@@ -92,17 +97,60 @@ median). The pipeline returns cleaned data, rejected rows, and a log.
 │   │   ├── sample_dataset.py   # Phase 1 sample data builder
 │   │   ├── validation.py       # Phase 2 validation rules
 │   │   └── data_cleaning.py    # Phase 2 cleaning pipeline
-│   └── management/
+│   ├── management/
+│   │   ├── __init__.py
+│   │   ├── exercise_manager.py   # Phase 4: exercise library operations
+│   │   ├── workout_manager.py    # Phase 4: sessions, sets, history, PRs
+│   │   └── program_manager.py    # Phase 4: programs, PPL/Upper-Lower templates
+│   ├── analysis/
+│   │   ├── __init__.py
+│   │   ├── eda.py                # Phase 5: exploratory data analysis
+│   │   └── recovery.py           # Phase 7: recovery analysis engine
+│   ├── metrics/
+│   │   ├── __init__.py
+│   │   ├── training_volume.py    # Phase 6
+│   │   ├── estimated_1rm.py      # Phase 6
+│   │   ├── progression.py        # Phase 6
+│   │   ├── muscle_workload.py    # Phase 6
+│   │   ├── recovery_metrics.py   # Phase 6
+│   │   └── average_rpe.py        # Phase 6
+│   ├── config/
+│   │   ├── __init__.py
+│   │   └── thresholds.py         # Phase 8 detection thresholds
+│   ├── detection/
+│   │   ├── __init__.py
+│   │   ├── plateau_detection.py  # Phase 8
+│   │   ├── workload_detection.py # Phase 8
+│   │   ├── fatigue_detection.py  # Phase 8
+│   │   └── deload_detection.py   # Phase 8
+│   └── reporting/
 │       ├── __init__.py
-│       ├── exercise_manager.py   # Phase 4: exercise library operations
-│       ├── workout_manager.py    # Phase 4: sessions, sets, history, PRs
-│       └── program_manager.py    # Phase 4: programs, PPL/Upper-Lower templates
+│       ├── report_generator.py   # Phase 9
+│       └── visualization.py      # Phase 9
+├── streamlit_app/
+│   ├── __init__.py
+│   ├── app.py                    # Phase 10: main entry + navigation
+│   ├── utils.py                  # Phase 10: DB → DataFrame helpers
+│   └── pages/
+│       ├── __init__.py
+│       ├── home.py               # Dashboard / daily summary
+│       ├── train.py              # Daily workout input
+│       ├── programs.py           # Program management
+│       ├── exercises.py          # Exercise library
+│       ├── history.py            # Previous sessions & PRs
+│       ├── recovery.py           # Daily recovery input
+│       └── analysis.py           # Charts, metrics, detection, reports
 ├── tests/
 │   ├── test_validation.py
 │   ├── test_cleaning.py
 │   ├── test_database.py        # Phase 3 database tests
-│   └── test_management.py      # Phase 4 management tests
-├── main.py                     # inspection + validation + database entry point
+│   ├── test_management.py      # Phase 4 management tests
+│   ├── test_detection.py       # Phase 8 detection tests
+│   ├── test_eda.py             # Phase 5 EDA tests
+│   ├── test_metrics.py         # Phase 6 metrics tests
+│   ├── test_recovery.py        # Phase 7 recovery tests
+│   └── test_reporting.py       # Phase 9 reporting tests
+├── main.py                     # backend inspection entry point
 ├── requirements.txt
 └── README.md
 ```

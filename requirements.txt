@@ -3,3 +3,4 @@ numpy>=2.1
 pandas>=2.2
 pytest>=8.0
 scipy>=1.11
+streamlit>=1.40
