@@ -29,7 +29,7 @@ def render(conn, user_id: int) -> None:
     if existing:
         st.info(f"A recovery log already exists for {log_date_str}. Submitting will update it.")
 
-    if st.button("Save Recovery", type="primary", use_container_width=True):
+    if st.button("Save Recovery", type="primary", width="stretch"):
         try:
             # Use 0.0 as sentinel for "not provided" for body weight
             bw = body_weight_kg if body_weight_kg > 0 else None

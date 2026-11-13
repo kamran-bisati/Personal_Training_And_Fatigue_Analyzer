@@ -114,7 +114,7 @@ def render(conn, user_id: int) -> None:
         }
         st.caption(template_details[template])
 
-        if st.button("Create Program from Template", type="primary", use_container_width=True):
+        if st.button("Create Program from Template", type="primary", width="stretch"):
             if not prog_name.strip():
                 st.error("Please enter a program name.")
             else:

@@ -101,7 +101,7 @@ def render(conn, user_id: int) -> None:
 
         col_save, col_clear = st.columns(2)
         with col_save:
-            if st.button("Save Workout", type="primary", use_container_width=True):
+            if st.button("Save Workout", type="primary", width="stretch"):
                 try:
                     wm = WorkoutManager(connection=conn)
                     try:
@@ -129,7 +129,7 @@ def render(conn, user_id: int) -> None:
                 except Exception as exc:
                     st.error(f"Failed to save workout: {exc}")
         with col_clear:
-            if st.button("Clear All", use_container_width=True):
+            if st.button("Clear All", width="stretch"):
                 st.session_state.pending_sets = []
                 st.rerun()
     else:

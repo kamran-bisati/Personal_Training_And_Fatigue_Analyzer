@@ -85,7 +85,7 @@ def render(conn, user_id: int) -> None:
         st.subheader("Volume by Muscle Group")
         if not w.empty and "muscle_group" in w.columns:
             mw = bulk_muscle_workload(w, volume_col="volume_kg", muscle_col="muscle_group")
-            st.dataframe(mw, use_container_width=True, hide_index=True)
+            st.dataframe(mw, hide_index=True)
         else:
             st.caption("No volume data available.")
 
@@ -98,7 +98,7 @@ def render(conn, user_id: int) -> None:
                 date_col="date",
                 group_col=None,
             )
-            st.dataframe(rs, use_container_width=True, hide_index=True)
+            st.dataframe(rs, hide_index=True)
         else:
             st.caption("No recovery data available.")
 

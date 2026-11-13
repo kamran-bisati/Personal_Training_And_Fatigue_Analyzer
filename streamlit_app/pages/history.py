@@ -66,6 +66,5 @@ def render(conn, user_id: int) -> None:
     st.subheader("All Set Records (Data View)")
     st.dataframe(
         workout_df.sort_values("date", ascending=False),
-        use_container_width=True,
         hide_index=True,
     )

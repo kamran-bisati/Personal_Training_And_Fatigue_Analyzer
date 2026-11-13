@@ -46,6 +46,7 @@ def load_recovery_df(conn, user_id: int) -> pd.DataFrame:
             columns=["date", "sleep_hours", "body_weight_kg", "soreness", "energy"]
         )
     df = pd.DataFrame([dict(r) for r in rows])
+    df = df.rename(columns={"log_date": "date"})
     df["date"] = pd.to_datetime(df["date"])
     return df[["date", "sleep_hours", "body_weight_kg", "soreness", "energy"]]
 
