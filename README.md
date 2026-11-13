@@ -1,12 +1,43 @@
 # Personal Training and Fatigue Analyzer
 
-A local fitness analytics and training intelligence system.
+A local fitness analytics and training intelligence system where users log
+workouts and recovery data through Streamlit. Python performs all calculations,
+statistics, and rule-based detection. SQLite stores every record locally.
 
-Users log workouts and recovery data through Streamlit. Python performs all
-calculations, statistics and rule-based detection. SQLite stores every record
-locally. No machine learning, no CSV uploads, no cloud services.
+**No machine learning, no CSV uploads, no cloud services, no AI recommendations.**
 
-**Stack:** Python, NumPy, Pandas, SQLite, Matplotlib, Streamlit, SciPy, Pytest
+---
+
+## Features
+
+| Category | Capabilities |
+|---|---|
+| **User management** | Create and manage user profiles, store basic fitness info, per-user historical records |
+| **Workout management** | Log sessions with sets, reps, weight, RPE; workout history; personal records |
+| **Program management** | Custom training programs, PPL and Upper/Lower splits, exercise-to-day assignment |
+| **Exercise library** | Categorize by muscle group and equipment; add custom exercises |
+| **Recovery management** | Log sleep, body weight, soreness, energy — including rest days |
+| **Data validation** | Reject invalid inputs (negative reps, RPE > 10, future dates, duplicates, etc.) |
+| **Fitness metrics** | Training volume, estimated 1RM (Epley), strength progression, muscle-group workload, RPE, recovery metrics |
+| **Detection** | Strength plateaus, excessive workload, accumulated fatigue, potential deload signals |
+| **Reporting** | Daily, weekly, monthly summaries; detection alerts; textual explanations |
+| **Visualization** | Strength progression, weekly volume, sleep, muscle-group workload, body weight, RPE charts |
+| **Interface** | Streamlit app with 7 pages: Home, Train, Programs, Exercises, History, Recovery, Analysis |
+
+---
+
+## Tech Stack
+
+| Technology | Purpose |
+|---|---|
+| Python 3.13 | Core programming and logic |
+| NumPy | Mathematical calculations |
+| Pandas | Data processing and analysis |
+| SQLite / sqlite3 | Persistent local database |
+| Matplotlib | Data visualization |
+| Streamlit | User interface (presentation/input layer only) |
+| SciPy | Statistical methods (correlation) |
+| Pytest | Testing (181 tests) |
 
 ---
 
@@ -24,179 +55,199 @@ locally. No machine learning, no CSV uploads, no cloud services.
 | 8 | Plateau / workload / fatigue / deload detection | done |
 | 9 | Reporting and visualisation | done |
 | 10 | Streamlit interface | done |
-| 11 | Testing, debugging and documentation | next |
+| 11 | Testing, debugging and documentation | done |
 
 ---
 
 ## Setup
 
 ```bash
+# Clone the repository
+git clone https://github.com/kamran-bisati/Personal_Training_And_Fatigue_Analyzer.git
+cd Personal_Training_And_Fatigue_Analyzer
+
+# Create and activate virtual environment
 python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+source .venv/bin/activate  # on macOS/Linux
+# or: .venv\Scripts\activate  # on Windows
+
+# Install dependencies
+pip install -r requirements.txt
 ```
 
-## Run the current build
+---
 
-```bash
-# Backend tests
-python -m pytest -q
+## How to Run
 
-# Streamlit app
-.venv/bin/streamlit run streamlit_app/app.py
-```
-
-This builds the sample dataset in memory, prints an inspection report,
-runs the Phase 2 validation and cleaning pipeline on the dirty sample, then
-builds `database/fitness.db`, seeds it, inserts the sample data and prints
-row counts plus sample queries (workout history, personal records).
-Then launch the Streamlit interface at http://localhost:8501.
-
-## Run tests
+### Backend tests
 
 ```bash
 .venv/bin/python -m pytest -q
 ```
 
----
+### Streamlit application
 
-## Validation rules (Phase 2)
+```bash
+.venv/bin/streamlit run streamlit_app/app.py
+```
 
-Severity is either `error` (record rejected) or `warning` (record kept, user
-informed). Outliers are always warnings and are never auto-deleted.
+Then open http://localhost:8501 in your browser.
 
-* required columns present; numeric fields parse as numbers
-* ranges: sets 1-20, reps 1-100, weight 0-500 kg, RPE 1-10,
-  sleep 0-24 h, soreness 1-10, energy 1-10, body weight 30-300 kg
-* RPE must be a multiple of 0.5 (warning)
-* sets and reps must be whole numbers (warning)
-* dates parse, are not in the future, and are not before 2020-01-01
-* exact duplicate rows and same-date/same-exercise records (warnings)
-* duplicate recovery dates (warning)
-* barbell exercise logged at 0 kg (warning)
-* sets x reps > 200 in one record (warning)
-* body weight changing more than 3 kg between entries (warning)
-* sleep below 3 h or above 12 h (warning)
-* IQR outliers on volume (per exercise) and sleep
+### Pages
 
-Cleaning strategies: `keep` (leave missing values), `drop` (remove rows with
-missing required fields), `median` (fill missing numeric values with the column
-median). The pipeline returns cleaned data, rejected rows, and a log.
+| Page | Purpose |
+|---|---|
+| **Home** | Daily summary dashboard — headline metrics, recent sessions, recent recovery |
+| **Train** | Log workouts — select date, duration, exercises, sets, reps, weight, RPE |
+| **Programs** | Create custom programs or use PPL / Upper/Lower templates |
+| **Exercises** | Browse and manage the exercise library |
+| **History** | View past sessions and personal records per exercise |
+| **Recovery** | Log daily sleep, body weight, soreness, energy |
+| **Analysis** | Charts, detection alerts (plateau, workload, fatigue, deload), reports |
 
 ---
 
-## Project layout
+## Project Layout
 
 ```
 .
+├── .streamlit/
+│   └── config.toml          # Streamlit theme and server config
 ├── database/
 │   ├── __init__.py
-│   ├── db_setup.py          # Phase 3: connection, schema DDL, seeding
-│   └── repository.py        # Phase 3: CRUD layer
+│   ├── db_setup.py          # Connection, schema DDL, exercise seeding
+│   └── repository.py        # CRUD layer (8 tables)
 ├── src/
 │   ├── data/
-│   │   ├── sample_dataset.py   # Phase 1 sample data builder
-│   │   ├── validation.py       # Phase 2 validation rules
-│   │   └── data_cleaning.py    # Phase 2 cleaning pipeline
+│   │   ├── sample_dataset.py   # Phase 1: sample fitness dataset
+│   │   ├── validation.py       # Phase 2: validation rules
+│   │   └── data_cleaning.py    # Phase 2: cleaning pipeline
 │   ├── management/
-│   │   ├── __init__.py
 │   │   ├── exercise_manager.py   # Phase 4: exercise library operations
 │   │   ├── workout_manager.py    # Phase 4: sessions, sets, history, PRs
 │   │   └── program_manager.py    # Phase 4: programs, PPL/Upper-Lower templates
 │   ├── analysis/
-│   │   ├── __init__.py
 │   │   ├── eda.py                # Phase 5: exploratory data analysis
 │   │   └── recovery.py           # Phase 7: recovery analysis engine
 │   ├── metrics/
-│   │   ├── __init__.py
 │   │   ├── training_volume.py    # Phase 6
-│   │   ├── estimated_1rm.py      # Phase 6
+│   │   ├── estimated_1rm.py      # Phase 6 (Epley formula)
 │   │   ├── progression.py        # Phase 6
 │   │   ├── muscle_workload.py    # Phase 6
 │   │   ├── recovery_metrics.py   # Phase 6
 │   │   └── average_rpe.py        # Phase 6
 │   ├── config/
-│   │   ├── __init__.py
-│   │   └── thresholds.py         # Phase 8 detection thresholds
+│   │   └── thresholds.py         # Phase 8: detection thresholds
 │   ├── detection/
-│   │   ├── __init__.py
 │   │   ├── plateau_detection.py  # Phase 8
 │   │   ├── workload_detection.py # Phase 8
 │   │   ├── fatigue_detection.py  # Phase 8
 │   │   └── deload_detection.py   # Phase 8
 │   └── reporting/
-│       ├── __init__.py
-│       ├── report_generator.py   # Phase 9
-│       └── visualization.py      # Phase 9
+│       ├── report_generator.py   # Phase 9: daily/weekly/monthly reports
+│       └── visualization.py      # Phase 9: matplotlib charts
 ├── streamlit_app/
 │   ├── __init__.py
-│   ├── app.py                    # Phase 10: main entry + navigation
+│   ├── app.py                    # Phase 10: entry point + navigation
 │   ├── utils.py                  # Phase 10: DB → DataFrame helpers
 │   └── pages/
-│       ├── __init__.py
-│       ├── home.py               # Dashboard / daily summary
-│       ├── train.py              # Daily workout input
+│       ├── home.py               # Dashboard
+│       ├── train.py              # Workout input
 │       ├── programs.py           # Program management
 │       ├── exercises.py          # Exercise library
-│       ├── history.py            # Previous sessions & PRs
-│       ├── recovery.py           # Daily recovery input
-│       └── analysis.py           # Charts, metrics, detection, reports
+│       ├── history.py            # Session history + PRs
+│       ├── recovery.py           # Recovery input
+│       └── analysis.py           # Charts, detection, reports
 ├── tests/
 │   ├── test_validation.py
 │   ├── test_cleaning.py
-│   ├── test_database.py        # Phase 3 database tests
-│   ├── test_management.py      # Phase 4 management tests
-│   ├── test_detection.py       # Phase 8 detection tests
-│   ├── test_eda.py             # Phase 5 EDA tests
-│   ├── test_metrics.py         # Phase 6 metrics tests
-│   ├── test_recovery.py        # Phase 7 recovery tests
-│   └── test_reporting.py       # Phase 9 reporting tests
-├── main.py                     # backend inspection entry point
+│   ├── test_database.py
+│   ├── test_management.py
+│   ├── test_detection.py
+│   ├── test_eda.py
+│   ├── test_metrics.py
+│   ├── test_recovery.py
+│   ├── test_reporting.py
+│   └── test_streamlit.py         # Phase 11: Streamlit UI tests
+├── main.py                     # Backend inspection entry point (Phases 1-3)
 ├── requirements.txt
+├── .gitignore
 └── README.md
 ```
 
-Folders for `analysis/`, `metrics/`, `detection/`, `management/`, `reporting/`,
-and `streamlit_app/` are added in the phase that needs them.
+---
 
-## Database schema (Phase 3)
+## Database Schema (Phase 3)
 
-8 tables: `users`, `exercises`, `workout_sessions`, `workout_sets`,
-`recovery_logs`, `training_programs`, `program_days`, `program_exercises`.
+8 tables with foreign keys and cascade deletes:
 
-Key rules enforced by the schema:
+- **users** — profile basics (name, age, height, weight, goal)
+- **exercises** — library (name, primary/secondary muscle group, equipment, custom flag)
+- **workout_sessions** — one per user per date (date, duration, notes)
+- **workout_sets** — one per set (session, exercise, set number, reps, weight, RPE)
+- **recovery_logs** — one per user per date (sleep, body weight, soreness, energy)
+- **training_programs** — user programs (name, split type, active flag)
+- **program_days** — ordered days within a program
+- **program_exercises** — exercises assigned to days (target sets, reps, weight)
 
-* `PRAGMA foreign_keys = ON` on every connection
-* `ON DELETE CASCADE`: user → sessions/recovery/programs; session → sets
-* `UNIQUE(user_id, session_date)` and `UNIQUE(user_id, log_date)` block duplicate days
-* `CHECK` constraints mirror Phase 2 ranges (reps > 0, RPE 1–10, weight ≥ 0)
-* Dates stored as ISO text (`YYYY-MM-DD`)
-* `database/fitness.db` is gitignored; tests use `:memory:`
+Constraints: `PRAGMA foreign_keys = ON`, `ON DELETE CASCADE`,
+`UNIQUE(user_id, session_date)`, `UNIQUE(user_id, log_date)`,
+`CHECK` constraints on ranges (reps > 0, RPE 1–10, weight ≥ 0, etc.)
 
 ---
 
-## Sample dataset
+## Detection Thresholds (Phase 8)
 
-`src/data/sample_dataset.py` generates five weeks (2026-10-05 to 2026-11-08)
-of deterministic data across two tables:
+All thresholds live in `src/config/thresholds.py` and are engineering rules —
+not medically validated:
 
-* `workout_sets` - one row per exercise performed in a session
-  (`date`, `week`, `exercise`, `muscle_group`, `equipment`, `sets`, `reps`,
-  `weight_kg`, `rpe`, `session_duration_min`)
-* `recovery_logs` - one row per calendar day, rest days included
-  (`date`, `week`, `day_type`, `sleep_hours`, `body_weight_kg`, `soreness`,
-  `energy`)
+| Detection | Threshold |
+|---|---|
+| Plateau | < 2% e1RM improvement over 4–6 weeks, ≥ 4 sessions |
+| Workload monitoring | > 10% week-over-week volume increase |
+| Workload significant spike | > 20% week-over-week volume increase |
+| Fatigue (RPE) | Average RPE ≥ 8.5 |
+| Fatigue (sleep) | Average sleep < 6 hours |
+| Fatigue (soreness) | Average soreness ≥ 7/10 |
+| Fatigue (energy) | Average energy ≤ 4/10 |
+| Fatigue (performance) | Declining e1RM trend |
+| Fatigue elevated | ≥ 3 of 5 indicators flagged |
+| Deload | Elevated fatigue + workload warning/spike over ≥ 2 weeks |
 
-Intentional characteristics:
+---
 
-* training load and RPE rise week over week, sleep and energy fall, soreness rises
-* weeks 4-5 add one extra set to every exercise, a ~34% jump in weekly volume
-  (the excessive-workload signal for Phase 8)
-* bench press stops progressing after week 3 (a plateau for Phase 8 to find)
-* a handful of dirty rows (duplicate, negative reps, RPE 15, missing weight,
-  missing sleep, energy 11) for Phase 2 validation to catch
-* `session_duration_min` repeats on every row of a session - never sum it
-* bodyweight movements (pull-ups) are stored as `weight_kg = 0.0`
+## Sample Dataset
+
+`src/data/sample_dataset.py` generates 5 weeks (2026-10-05 to 2026-11-08)
+of deterministic data. It intentionally includes:
+
+- A **~34% volume spike** in weeks 4–5 (workload detection signal)
+- A **bench press plateau** after week 3 (e1RM stuck at 99.2 kg)
+- **Declining recovery**: sleep 7.5 → 6.4 h, soreness 3 → 6, energy 8 → 6
+- **Dirty rows**: duplicate, negative reps, RPE 15, missing weight, missing sleep, energy 11
 
 Call `load_dataset(include_anomalies=False)` for clean data.
 
-**Rule-based decision support only - not a medical diagnosis.**
+---
+
+## Disclaimer
+
+This system provides **rule-based decision support only**. It is not a medical
+diagnosis, not a substitute for professional medical advice, and not a
+replacement for a qualified coach or trainer. Always consult a healthcare
+professional before making significant changes to your training or recovery.
+
+---
+
+## Testing
+
+```bash
+# All tests (181)
+.venv/bin/python -m pytest -q
+
+# Streamlit UI tests only
+.venv/bin/python -m pytest tests/test_streamlit.py -v
+
+# Specific phase tests
+.venv/bin/python -m pytest tests/test_validation.py tests/test_cleaning.py tests/test_database.py tests/test_management.py -v
+```
