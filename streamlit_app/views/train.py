@@ -2,11 +2,28 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 import streamlit as st
 
 from database import repository as repo
 from src.management.workout_manager import WorkoutManager
+
+
+def _next_set_number(conn, session_id, exercise_id, pending_sets) -> int:
+    """Suggest the next set number for an exercise in a session.
+
+    Considers both already-saved sets in the database and sets currently in
+    the pending cart, so the same set number is never suggested twice.
+    """
+    manager = WorkoutManager(connection=conn)
+    try:
+        next_num = manager.next_set_number(session_id, exercise_id)
+    finally:
+        manager.close()
+    used = {int(s["set_number"]) for s in pending_sets if s["exercise_id"] == exercise_id}
+    while next_num in used:
+        next_num += 1
+    return next_num
 
 
 def render(conn, user_id: int) -> None:
@@ -44,16 +61,22 @@ def render(conn, user_id: int) -> None:
         st.warning("No exercises in the library. Add some in the Exercises page first.")
         return
 
-    exercise_options = {e["name"]: e["id"] for e in exercises}
+    # Display names, but keep database IDs as the underlying values so
+    # duplicate exercise names cannot collide.
+    exercise_options = {f"{e['name']} (ID {e['id']})": e["id"] for e in exercises}
+    exercise_by_id = {e["id"]: e for e in exercises}
 
     # ---------- Add set form ----------
     st.subheader("Add Set")
     with st.form("add_set_form", clear_on_submit=True):
         c1, c2, c3, c4, c5 = st.columns(5)
         with c1:
-            ex_name = st.selectbox("Exercise", list(exercise_options.keys()))
+            ex_label = st.selectbox("Exercise", list(exercise_options.keys()))
         with c2:
-            set_number = st.number_input("Set #", min_value=1, value=1, step=1)
+            # Suggest the next set number for this exercise/session.
+            ex_id = exercise_options[ex_label]
+            suggested = _next_set_number(conn, session_id, ex_id, st.session_state.pending_sets)
+            set_number = st.number_input("Set #", min_value=1, value=suggested, step=1)
         with c3:
             reps = st.number_input("Reps", min_value=1, max_value=100, value=8, step=1)
         with c4:
@@ -63,17 +86,30 @@ def render(conn, user_id: int) -> None:
         submitted = st.form_submit_button("Add Set to Cart")
 
     if submitted:
-        ex_id = exercise_options[ex_name]
+        ex_id = exercise_options[ex_label]
         new_set = {
             "exercise_id": ex_id,
-            "exercise_name": ex_name,
+            "exercise_name": exercise_by_id[ex_id]["name"],
             "set_number": int(set_number),
             "reps": int(reps),
             "weight_kg": float(weight_kg),
             "rpe": float(rpe),
         }
-        st.session_state.pending_sets.append(new_set)
-        st.success(f"Added: {ex_name} — {reps} reps × {weight_kg} kg @ RPE {rpe}")
+        # Prevent accidental duplicate set numbers for the same exercise.
+        duplicate = any(
+            s["exercise_id"] == ex_id and int(s["set_number"]) == int(set_number)
+            for s in st.session_state.pending_sets
+        )
+        if duplicate:
+            st.error(
+                f"Set #{int(set_number)} for {exercise_by_id[ex_id]['name']} is already in the cart. "
+                "Change the set number or remove the existing set first."
+            )
+        else:
+            st.session_state.pending_sets.append(new_set)
+            st.success(
+                f"Added: {exercise_by_id[ex_id]['name']} — {reps} reps × {weight_kg} kg @ RPE {rpe}"
+            )
 
     # ---------- Pending sets ----------
     if st.session_state.pending_sets:
@@ -101,7 +137,15 @@ def render(conn, user_id: int) -> None:
 
         col_save, col_clear = st.columns(2)
         with col_save:
-            if st.button("Save Workout", type="primary", width="stretch"):
+            saving = st.session_state.get("workout_saving", False)
+            if st.button(
+                "Save Workout",
+                type="primary",
+                width="stretch",
+                disabled=saving,
+            ):
+                # Guard against double submission.
+                st.session_state.workout_saving = True
                 try:
                     wm = WorkoutManager(connection=conn)
                     try:
@@ -122,12 +166,15 @@ def render(conn, user_id: int) -> None:
                                 rpe=s["rpe"],
                             )
                         st.session_state.pending_sets = []
+                        st.session_state.pending_sets_user_id = user_id
                         st.success(f"Workout saved! Session ID: {session_id}")
                         st.rerun()
                     finally:
                         wm.close()
                 except Exception as exc:
                     st.error(f"Failed to save workout: {exc}")
+                finally:
+                    st.session_state.workout_saving = False
         with col_clear:
             if st.button("Clear All", width="stretch"):
                 st.session_state.pending_sets = []

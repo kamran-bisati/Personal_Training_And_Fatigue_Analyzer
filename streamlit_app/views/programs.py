@@ -92,7 +92,7 @@ def render(conn, user_id: int) -> None:
                     day_order = st.number_input("Day Order", min_value=1, value=1, step=1, key="day_order_new")
                     if st.button("Add Day", key="add_day_btn"):
                         if day_name.strip():
-                            pm.add_day(pid, day_name.strip(), int(day_order))
+                            repo.create_program_day(conn, pid, day_name.strip(), int(day_order))
                             st.success(f"Added day: {day_name.strip()}")
                             st.rerun()
                 finally:

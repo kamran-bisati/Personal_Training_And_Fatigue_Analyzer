@@ -45,17 +45,23 @@ def render(conn, user_id: int) -> None:
 
     # ---------- Personal Records ----------
     st.subheader("Personal Records (by Exercise)")
-    exercises = repo.list_exercises(conn)
+    exercises = repo.list_exercises(conn, include_archived=True)
     if not exercises:
         st.caption("No exercises in library.")
         return
 
     for ex in exercises:
-        pr = repo.personal_records(conn, user_id, ex["id"])
-        if pr:
+        prs = repo.personal_records(conn, user_id, ex["id"])
+        if prs:
+            pr = prs[0]
             st.write(
-                f"**{pr['exercise_name']}**: Max {pr['max_weight_kg']} kg × {pr['max_reps']} reps "
-                f"(max volume {pr['max_volume_kg']:,.0f} kg)"
+                f"**{pr['exercise_name']}**: "
+                f"heaviest {pr['max_weight_kg']:.1f} kg × {pr['max_weight_reps']} reps | "
+                f"most reps {pr['max_reps']} × {pr['max_reps_weight']:.1f} kg | "
+                f"best single-set volume {pr['max_volume_kg']:,.0f} kg "
+                f"({pr['max_volume_weight']:.1f} × {pr['max_volume_reps']}) | "
+                f"est. 1RM {pr['best_e1rm_kg']:.1f} kg "
+                f"({pr['best_e1rm_weight']:.1f} × {pr['best_e1rm_reps']})"
             )
         else:
             st.write(f"**{ex['name']}**: No records yet")

@@ -119,9 +119,10 @@ def render(conn, user_id: int) -> None:
     recovery_rows = repo.list_recovery_by_user(conn, user_id, limit=5)
     if recovery_rows:
         for r in recovery_rows:
+            bw_str = f"{r['body_weight_kg']} kg" if r["body_weight_kg"] is not None else "—"
             st.write(
                 f"• {r['log_date']}: sleep {r['sleep_hours']} h, "
-                f"weight {r['body_weight_kg']} kg, soreness {r['soreness']}/10, "
+                f"weight {bw_str}, soreness {r['soreness']}/10, "
                 f"energy {r['energy']}/10"
             )
     else:

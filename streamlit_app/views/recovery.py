@@ -18,7 +18,9 @@ def render(conn, user_id: int) -> None:
         log_date = st.date_input("Date", value=date.today())
         sleep_hours = st.number_input("Sleep (hours)", min_value=0.0, max_value=24.0, value=7.5, step=0.5)
     with col2:
-        body_weight_kg = st.number_input("Body Weight (kg)", min_value=30.0, max_value=300.0, value=0.0, step=0.5)
+        # 0.0 is the sentinel for "body weight not provided"; it is converted
+        # to NULL before saving so body-weight logging stays optional.
+        body_weight_kg = st.number_input("Body Weight (kg, optional)", min_value=0.0, max_value=300.0, value=0.0, step=0.5)
         soreness = st.number_input("Muscle Soreness (1-10)", min_value=1, max_value=10, value=3, step=1)
         energy = st.number_input("Energy Level (1-10)", min_value=1, max_value=10, value=8, step=1)
 

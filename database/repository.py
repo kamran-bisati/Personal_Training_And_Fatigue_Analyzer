@@ -131,9 +131,16 @@ def list_exercises(
     primary_muscle_group: Optional[str] = None,
     equipment: Optional[str] = None,
     custom_only: bool = False,
+    include_archived: bool = False,
 ) -> list[sqlite3.Row]:
     query = "SELECT * FROM exercises WHERE 1 = 1"
     params: list = []
+    if not include_archived:
+        # ``is_active`` may not exist on databases created before the archiving
+        # migration; guard for that so older installs keep working.
+        cols = {row["name"] for row in conn.execute("PRAGMA table_info(exercises)")}
+        if "is_active" in cols:
+            query += " AND is_active = 1"
     if primary_muscle_group:
         query += " AND primary_muscle_group = ?"
         params.append(primary_muscle_group)
@@ -144,6 +151,20 @@ def list_exercises(
         query += " AND is_custom = 1"
     query += " ORDER BY primary_muscle_group, name"
     return conn.execute(query, params).fetchall()
+
+
+def list_exercises_including_archived(
+    conn: sqlite3.Connection,
+    primary_muscle_group: Optional[str] = None,
+    equipment: Optional[str] = None,
+) -> list[sqlite3.Row]:
+    """Return all exercises, including archived ones, for history views."""
+    return list_exercises(
+        conn,
+        primary_muscle_group=primary_muscle_group,
+        equipment=equipment,
+        include_archived=True,
+    )
 
 
 def update_exercise(conn: sqlite3.Connection, exercise_id: int, **fields) -> int:
@@ -158,7 +179,30 @@ def update_exercise(conn: sqlite3.Connection, exercise_id: int, **fields) -> int
     return cursor.rowcount
 
 
+def set_exercise_active(conn: sqlite3.Connection, exercise_id: int, active: bool) -> int:
+    """Archive (active=False) or restore (active=True) an exercise.
+
+    Returns the number of rows updated.
+    """
+    return update_exercise(conn, exercise_id, is_active=1 if active else 0)
+
+
 def delete_exercise(conn: sqlite3.Connection, exercise_id: int) -> int:
+    """Delete an exercise.
+
+    Refuses to delete an exercise that has historical workout sets, because
+    ``workout_sets.exercise_id`` references it (FK ``ON DELETE RESTRICT``).
+    Callers should use :func:`set_exercise_active` to archive instead when
+    history exists. Returns rows affected (0 when refused).
+    """
+    in_use = conn.execute(
+        """
+        SELECT COUNT(*) AS c FROM workout_sets WHERE exercise_id = ?
+        """,
+        (exercise_id,),
+    ).fetchone()["c"]
+    if in_use:
+        return 0
     cursor = conn.execute("DELETE FROM exercises WHERE id = ?", (exercise_id,))
     conn.commit()
     return cursor.rowcount
@@ -511,19 +555,73 @@ def personal_records(
     conn: sqlite3.Connection,
     user_id: int,
     exercise_id: int,
-) -> list[sqlite3.Row]:
-    """Best single-set weight, reps and volume per exercise for a user."""
-    return conn.execute(
+) -> list[dict]:
+    """Best single-set metrics per exercise for a user.
+
+    Every reported value comes from an actually performed set, so the UI never
+    displays a weight/repetition combination that was never performed.
+
+    Returns a list with a single dict (empty when the exercise has no sets)
+    containing:
+
+    * ``max_weight_kg`` / ``max_weight_reps`` - heaviest set actually lifted
+    * ``max_reps`` / ``max_reps_weight`` - most reps actually performed
+    * ``max_volume_kg`` / ``max_volume_reps`` / ``max_volume_weight`` - highest
+      single-set volume (reps × weight) actually performed
+    * ``best_e1rm_kg`` / ``best_e1rm_weight`` / ``best_e1rm_reps`` - highest
+      estimated one-rep max (Epley) across all performed sets
+    * ``set_count`` - number of sets on record
+    """
+    rows = conn.execute(
         """
-        SELECT e.name AS exercise_name,
-               MAX(ws.weight_kg) AS max_weight_kg,
-               MAX(ws.reps) AS max_reps,
-               MAX(ws.reps * ws.weight_kg) AS max_volume_kg
+        SELECT ws.set_number, ws.reps, ws.weight_kg, ws.rpe,
+               e.name AS exercise_name
         FROM workout_sets ws
         JOIN exercises e ON ws.exercise_id = e.id
         JOIN workout_sessions s ON ws.session_id = s.id
         WHERE s.user_id = ? AND ws.exercise_id = ?
-        GROUP BY e.id
+        ORDER BY s.session_date DESC, ws.set_number
         """,
         (user_id, exercise_id),
     ).fetchall()
+
+    if not rows:
+        return []
+
+    sets = [dict(r) for r in rows]
+    exercise_name = sets[0]["exercise_name"]
+
+    def e1rm(weight_kg: float, reps: int) -> float:
+        return float(weight_kg) * (1 + float(reps) / 30.0)
+
+    # Heaviest set actually performed (tiebreak: more reps, then later set).
+    max_weight_set = max(
+        sets, key=lambda s: (s["weight_kg"], s["reps"], s["set_number"])
+    )
+    # Most reps actually performed (tiebreak: heavier weight, then later set).
+    max_reps_set = max(
+        sets, key=lambda s: (s["reps"], s["weight_kg"], s["set_number"])
+    )
+    # Highest single-set volume actually performed.
+    max_volume_set = max(
+        sets, key=lambda s: (s["reps"] * s["weight_kg"], s["weight_kg"], s["set_number"])
+    )
+    # Highest estimated 1RM across performed sets.
+    best_e1rm_set = max(sets, key=lambda s: e1rm(s["weight_kg"], s["reps"]))
+
+    return [
+        {
+            "exercise_name": exercise_name,
+            "max_weight_kg": float(max_weight_set["weight_kg"]),
+            "max_weight_reps": int(max_weight_set["reps"]),
+            "max_reps": int(max_reps_set["reps"]),
+            "max_reps_weight": float(max_reps_set["weight_kg"]),
+            "max_volume_kg": float(max_volume_set["reps"] * max_volume_set["weight_kg"]),
+            "max_volume_reps": int(max_volume_set["reps"]),
+            "max_volume_weight": float(max_volume_set["weight_kg"]),
+            "best_e1rm_kg": float(e1rm(best_e1rm_set["weight_kg"], best_e1rm_set["reps"])),
+            "best_e1rm_weight": float(best_e1rm_set["weight_kg"]),
+            "best_e1rm_reps": int(best_e1rm_set["reps"]),
+            "set_count": len(sets),
+        }
+    ]

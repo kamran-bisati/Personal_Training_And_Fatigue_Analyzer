@@ -11,6 +11,12 @@ Run from the project root:
 from __future__ import annotations
 
 import pandas as pd
+from pathlib import Path
+
+# Ensure the demo always connects to the project's database file regardless of
+# the current working directory.
+ROOT = Path(__file__).resolve().parent.parent
+DB_PATH = str(ROOT / "database" / "fitness.db")
 
 from database import repository as repo
 from database.db_setup import get_connection, reset_db
@@ -146,7 +152,7 @@ def show_validation(dataset: dict[str, pd.DataFrame]) -> None:
 def show_management() -> None:
     section("PHASE 4 - Workout and exercise management")
 
-    conn = get_connection("database/fitness.db")
+    conn = get_connection(DB_PATH)
     try:
         user_id = repo.create_user(conn, "Demo User", age=30, height_cm=180.0, weight_kg=78.0, goal="strength")
 
@@ -198,7 +204,7 @@ def show_database(dataset: dict[str, pd.DataFrame]) -> None:
     clean_workouts = clean_workout_sets(dataset["workout_sets"], missing_strategy="drop").data
     clean_recovery = clean_recovery_logs(dataset["recovery_logs"], missing_strategy="drop").data
 
-    conn = reset_db("database/fitness.db")
+    conn = reset_db(DB_PATH)
     try:
         user_id = repo.create_user(conn, "Demo User", age=30, height_cm=180.0, weight_kg=78.0, goal="strength")
 

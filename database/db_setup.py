@@ -5,6 +5,8 @@ Phase 3 deliverable:
 * ``get_connection()``  - opens a connection with foreign keys enforced
 * ``init_db()``         - creates the 8-table schema
 * ``seed_exercises()``  - populates the exercise library
+* ``migrate_db()``      - safely migrates an existing database to the current
+                          schema without losing data
 * ``reset_db()``        - wipes everything and starts fresh (tests & demos)
 
 Schema tables:
@@ -15,6 +17,14 @@ training_programs, program_days, program_exercises
 Dates are stored as ISO text (``YYYY-MM-DD``), which is the SQLite convention.
 Foreign keys cascade on delete so removing a user cleanly removes their
 sessions, sets, recovery logs and programs.
+
+Exercise archiving:
+
+``exercises.is_active`` defaults to 1. Archived exercises (``is_active = 0``)
+are never deleted and their historical ``workout_sets`` remain intact. The
+``workout_sets.exercise_id`` foreign key uses ``ON DELETE RESTRICT`` so an
+exercise that has historical records cannot be accidentally deleted at the
+database level.
 """
 
 from __future__ import annotations
@@ -46,6 +56,7 @@ CREATE TABLE IF NOT EXISTS exercises (
     secondary_muscle_group TEXT,
     equipment          TEXT NOT NULL,
     is_custom          INTEGER NOT NULL DEFAULT 0,
+    is_active          INTEGER NOT NULL DEFAULT 1,
     created_by_user_id INTEGER,
     created_at         TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE SET NULL
@@ -72,7 +83,7 @@ CREATE TABLE IF NOT EXISTS workout_sets (
     rpe           REAL CHECK (rpe >= 1 AND rpe <= 10),
     created_at    TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (session_id) REFERENCES workout_sessions(id) ON DELETE CASCADE,
-    FOREIGN KEY (exercise_id) REFERENCES exercises(id) ON DELETE CASCADE
+    FOREIGN KEY (exercise_id) REFERENCES exercises(id) ON DELETE RESTRICT
 );
 
 CREATE TABLE IF NOT EXISTS recovery_logs (
@@ -224,6 +235,79 @@ def seed_exercises(conn: sqlite3.Connection) -> int:
         inserted += 1
     conn.commit()
     return inserted
+
+
+def _column_exists(conn: sqlite3.Connection, table: str, column: str) -> bool:
+    """Return True if ``table`` has a column named ``column``."""
+    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    return any(row["name"] == column for row in rows)
+
+
+def _fk_action(conn: sqlite3.Connection, table: str, column: str) -> Optional[str]:
+    """Return the ON DELETE action of the FK from ``table.column``, or None."""
+    rows = conn.execute(f"PRAGMA foreign_key_list({table})").fetchall()
+    for row in rows:
+        if row["from"] == column and row["table"] == "exercises":
+            return row["on_delete"]
+    return None
+
+
+def migrate_db(conn: sqlite3.Connection) -> None:
+    """Safely migrate an existing database to the current schema.
+
+    The migration is idempotent and data-preserving:
+
+    * Adds ``exercises.is_active`` (default 1) when missing so exercises can be
+      archived instead of deleted.
+    * Recreates ``workout_sets`` with ``ON DELETE RESTRICT`` for
+      ``exercise_id`` when it currently cascades, so an exercise that has
+      historical records can no longer be deleted at the database level.
+      Existing set records are preserved.
+    """
+    # --- exercises.is_active ---------------------------------------------
+    if not _column_exists(conn, "exercises", "is_active"):
+        conn.execute(
+            "ALTER TABLE exercises ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1"
+        )
+        conn.commit()
+
+    # --- workout_sets.exercise_id ON DELETE RESTRICT ----------------------
+    fk_action = _fk_action(conn, "workout_sets", "exercise_id")
+    if fk_action and fk_action.upper() != "RESTRICT":
+        conn.execute("ALTER TABLE workout_sets RENAME TO workout_sets_old")
+        try:
+            conn.execute(
+                """
+                CREATE TABLE workout_sets (
+                    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id    INTEGER NOT NULL,
+                    exercise_id   INTEGER NOT NULL,
+                    set_number    INTEGER NOT NULL,
+                    reps          INTEGER NOT NULL CHECK (reps > 0),
+                    weight_kg     REAL NOT NULL CHECK (weight_kg >= 0),
+                    rpe           REAL CHECK (rpe >= 1 AND rpe <= 10),
+                    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+                    FOREIGN KEY (session_id) REFERENCES workout_sessions(id) ON DELETE CASCADE,
+                    FOREIGN KEY (exercise_id) REFERENCES exercises(id) ON DELETE RESTRICT
+                )
+                """
+            )
+            conn.execute(
+                """
+                INSERT INTO workout_sets
+                    (id, session_id, exercise_id, set_number, reps, weight_kg, rpe, created_at)
+                SELECT id, session_id, exercise_id, set_number, reps, weight_kg, rpe, created_at
+                FROM workout_sets_old
+                """
+            )
+            conn.execute("DROP TABLE workout_sets_old")
+            conn.commit()
+        except Exception:
+            # Restore the original table if anything goes wrong.
+            conn.execute("DROP TABLE IF EXISTS workout_sets")
+            conn.execute("ALTER TABLE workout_sets_old RENAME TO workout_sets")
+            conn.commit()
+            raise
 
 
 def reset_db(db_path: str | Path = DEFAULT_DB_PATH) -> sqlite3.Connection:

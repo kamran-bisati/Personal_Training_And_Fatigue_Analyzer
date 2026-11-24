@@ -156,7 +156,25 @@ class WorkoutManager:
 
     def personal_records(self, user_id: int, exercise_id: int) -> Optional[dict]:
         rows = repo.personal_records(self.conn, user_id, exercise_id)
-        return dict(rows[0]) if rows else None
+        return rows[0] if rows else None
+
+    def next_set_number(self, session_id: int, exercise_id: int) -> int:
+        """Suggest the next available set number for an exercise in a session.
+
+        Returns 1 when the exercise has no sets in the session yet, otherwise
+        one more than the current maximum set number.
+        """
+        row = self.conn.execute(
+            """
+            SELECT MAX(ws.set_number) AS max_set
+            FROM workout_sets ws
+            JOIN workout_sessions s ON ws.session_id = s.id
+            WHERE ws.session_id = ? AND ws.exercise_id = ?
+            """,
+            (session_id, exercise_id),
+        ).fetchone()
+        current_max = row["max_set"] if row and row["max_set"] is not None else 0
+        return int(current_max) + 1
 
     def session_exists_on_date(self, user_id: int, session_date: str) -> bool:
         sessions = self.list_sessions(user_id)
