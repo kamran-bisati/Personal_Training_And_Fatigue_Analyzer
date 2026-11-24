@@ -15,11 +15,15 @@ from pathlib import Path
 
 # Ensure the demo always connects to the project's database file regardless of
 # the current working directory.
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent
 DB_PATH = str(ROOT / "database" / "fitness.db")
+# The Phase 3 demo in show_database() wipes and reseeds its target DB, so it
+# must never point at the real multi-user database. Use a separate demo file
+# instead, leaving database/fitness.db (and its seeded profiles) untouched.
+DEMO_DB_PATH = str(ROOT / "database" / "demo_eval.db")
 
 from database import repository as repo
-from database.db_setup import get_connection, reset_db
+from database.db_setup import get_connection, init_db, reset_db, seed_exercises
 from src.data.data_cleaning import clean_recovery_logs, clean_workout_sets
 from src.data.sample_dataset import load_dataset
 from src.data.validation import (
@@ -152,7 +156,9 @@ def show_validation(dataset: dict[str, pd.DataFrame]) -> None:
 def show_management() -> None:
     section("PHASE 4 - Workout and exercise management")
 
-    conn = get_connection(DB_PATH)
+    conn = get_connection(DEMO_DB_PATH)
+    init_db(conn)
+    seed_exercises(conn)
     try:
         user_id = repo.create_user(conn, "Demo User", age=30, height_cm=180.0, weight_kg=78.0, goal="strength")
 
@@ -204,7 +210,7 @@ def show_database(dataset: dict[str, pd.DataFrame]) -> None:
     clean_workouts = clean_workout_sets(dataset["workout_sets"], missing_strategy="drop").data
     clean_recovery = clean_recovery_logs(dataset["recovery_logs"], missing_strategy="drop").data
 
-    conn = reset_db(DB_PATH)
+    conn = reset_db(DEMO_DB_PATH)
     try:
         user_id = repo.create_user(conn, "Demo User", age=30, height_cm=180.0, weight_kg=78.0, goal="strength")
 
